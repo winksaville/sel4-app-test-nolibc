@@ -5,9 +5,9 @@
 # the BSD 2-Clause license. Note that NO WARRANTY is provided.
 # See "LICENSE_BSD2.txt" for details.
 
-apps-$(CONFIG_APP_TEST_NEWLIBS) += test-newlibs
+apps-$(CONFIG_APP_TEST_NOLIBC) += test-nolibc
 
 # Libraries needed
-test-newlibs-y = libsel4 libsel4putchar libsel4printf libsel4benchmark libsel4startstop libsel4assert
+test-nolibc-y = libsel4 libsel4putchar libsel4printf libsel4benchmark libsel4startstop libsel4assert
 
-test-newlibs: kernel_elf $(test-newlibs-y)
+test-nolibc: kernel_elf $(test-nolibc-y)

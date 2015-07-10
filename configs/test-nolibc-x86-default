@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Project Configuration
-# Thu Jul  9 16:45:58 2015
+# Thu Jul  9 17:24:56 2015
 #
 
 #
@@ -69,7 +69,7 @@ CONFIG_OPTIMISATION_O2=y
 # CONFIG_APP_BOOTINFO is not set
 # CONFIG_APP_ASSERT is not set
 # CONFIG_APP_MYASSERT is not set
-CONFIG_APP_TEST_NEWLIBS=y
+CONFIG_APP_TEST_NOLIBC=y
 
 #
 # seL4 Libraries

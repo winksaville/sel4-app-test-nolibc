@@ -108,7 +108,7 @@ int main(void) {
     seL4_Printf("bi=%p\n", bi);
     seL4_Printf("bi->nodeId=%d\n", bi->nodeID);
 
-    seL4_Printf("Test newlibs done, Stopping...\n");
+    seL4_Printf("Test nolibc done, Stopping...\n");
     seL4_Stop();
 
     return 0;
