@@ -1,0 +1,19 @@
+#
+# Copyright 2015, Wink Saville
+#
+# This software may be distributed and modified according to the terms of
+# the BSD 2-Clause license. Note that NO WARRANTY is provided.
+# See "LICENSE_BSD2.txt" for details.
+
+menuconfig APP_TEST_NEWLIBS
+    bool "test-newlibs"
+    default n
+    select LIB_SEL4
+    select LIB_SEL4_PRINTF
+    select LIB_SEL4_PUTCHAR
+    select LIB_SEL4_ASSERT
+    select LIB_SEL4_BENCHMARK
+    select LIB_SEL4_STARTSTOP
+    help
+        Test new libs
+
