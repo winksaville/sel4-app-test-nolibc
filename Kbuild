@@ -8,6 +8,6 @@
 apps-$(CONFIG_APP_TEST_NOLIBC) += test-nolibc
 
 # Libraries needed
-test-nolibc-y = libsel4 libsel4putchar libsel4printf libsel4benchmark libsel4startstop libsel4assert
+test-nolibc-y = libsel4 libsel4string libsel4putchar libsel4printf libsel4benchmark libsel4startstop libsel4assert
 
 test-nolibc: kernel_elf $(test-nolibc-y)

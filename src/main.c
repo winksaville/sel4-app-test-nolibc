@@ -7,6 +7,7 @@
  */
 
 #include <sel4/sel4.h>
+#include <sel4/string.h>
 #include <sel4/printf.h>
 #include <sel4/debug_printf.h>
 #include <sel4/assert.h>
@@ -18,11 +19,37 @@
 
 volatile seL4_Uint32 volatile0 = 0;
 
+
+typedef struct {
+    int idx;
+    char buff[256];
+} Buffer;
+
+/**
+ * Write a character using seL4_PutChar
+ */
+static void writeChar(seL4_Writer* this, void* param) {
+    Buffer *pBuffer = (Buffer*)this->data;
+    char ch = ((char)(((int)param) & 0xff));
+    pBuffer->buff[pBuffer->idx++] = ch;
+    if (pBuffer->idx >= sizeof(pBuffer->buff)) {
+        pBuffer->idx = 0;
+    }
+}
+
 /**
  * No parameters are passed to main, the return
  * value is ignored and the program hangs.
  */
 int main(void) {
+    Buffer buffer = {
+        .idx = 0
+    };
+    seL4_Writer writer = {
+        .write = writeChar,
+        .data = &buffer
+    };
+
     /*
      * Manually test these compile time errors by enabling both
      * and the compilation should fail.
@@ -55,19 +82,83 @@ int main(void) {
     //seL4_BenchmarkResetLog();
     //seL4_BenchmarkDumpFullLog();
 
+    char *str1 = "str1";
+    char *str2 = "str2";
+    seL4_Assert(seL4_StrNCmp(seL4_Null, seL4_Null, 0) == 0);
+    seL4_Assert(seL4_StrNCmp(str1, seL4_Null, 0) == 0);
+    seL4_Assert(seL4_StrNCmp(seL4_Null, str1, 0) == 0);
+    seL4_Assert(seL4_StrNCmp(str1, str1, 4) == 0);
+    seL4_Assert(seL4_StrNCmp(str1, str2, 3) == 0);
+    seL4_Assert(seL4_StrNCmp(str1, str2, 4) < 0);
+    seL4_Assert(seL4_StrNCmp(str2, str1, 4) > 0);
+
     seL4_PutChar('h');
     seL4_PutChar('i');
     seL4_PutChar('\n');
     seL4_Printf("Hello, World\n");
     seL4_DebugPrintf("Hello, World: via seL4_DebugDrintf\n");
 
-    seL4_Printf("%=%%\n");
-    seL4_Printf("str=%s\n", "string");
-    seL4_Printf("int=%d\n", -123);
-    seL4_Printf("uint=%u\n", -1);
-    seL4_Printf("uint=0x%x\n", 0xfedcba98);
-    seL4_Printf("uint64=0x%llx\n", 0xfedcba9876543210ll);
-    seL4_Printf("&main=%p\n", &main);
+    seL4_WPrintf(&writer, "Hello");
+    seL4_Printf("seL4_WPrintf: buffer.buff=%s\n", buffer.buff);
+    seL4_Assert(buffer.idx == 5);
+    seL4_Assert(seL4_StrNCmp("Hello", buffer.buff, 5) == 0);
+
+    seL4_Printf("%"); seL4_Printf("\n");
+    seL4_Printf("expect=<empty>\n");
+    seL4_Printf("       %1"); seL4_Printf("\n");
+    seL4_Printf("expect=%1\n");
+    seL4_Printf("       %%"); seL4_Printf("\n");
+    seL4_Printf("expect=%s\n", "%");
+    seL4_Printf("   str=%s\n", "string");
+    seL4_Printf("expect=string\n");
+    seL4_Printf("binary=%b\n",0);
+    seL4_Printf("expect=0\n");
+    seL4_Printf("binary=%b\n", 0x87654321);
+    seL4_Printf("expect=10000111011001010100001100100001\n");
+    seL4_Printf("binary=%b\n", 0xFFFFFFFF);
+    seL4_Printf("expect=11111111111111111111111111111111\n");
+    seL4_Printf("int   =%d\n", 0);
+    seL4_Printf("expect=0\n", 0);
+    seL4_Printf("int=%d\n", 1);
+    seL4_Printf("expect=1\n");
+    seL4_Printf("int   =%d\n", 0x7FFFFFFF);
+    seL4_Printf("expect=2147483647\n");
+    seL4_Printf("int   =%d\n", 0x80000000);
+    seL4_Printf("expect=-2147483648\n");
+    seL4_Printf("int   =%d\n", 0x80000001);
+    seL4_Printf("expect=-2147483647\n");
+    seL4_Printf("int   =%d\n", -1);
+    seL4_Printf("expect=-1\n");
+    seL4_Printf("uint  =%u\n", 0x0);
+    seL4_Printf("expect=0\n");
+    seL4_Printf("uint  =%u\n", 0x7FFFFFFF);
+    seL4_Printf("expect=2147483647\n");
+    seL4_Printf("uint  =%u\n", 0x80000000);
+    seL4_Printf("expect=2147483648\n");
+    seL4_Printf("uint  =%u\n", 0x80000001);
+    seL4_Printf("expect=2147483649\n");
+    seL4_Printf("uint  =0x%x\n", 0x1234567);
+    seL4_Printf("expect=0x1234567\n");
+    seL4_Printf("uint  =0x%x\n", 0x89ABCDEF);
+    seL4_Printf("expect=0x89ABCDEF\n");
+    seL4_Printf("uint  =0x%x\n", 0xFFFFFFFF);
+    seL4_Printf("expect=0xFFFFFFFF\n");
+    seL4_Printf("       %l"); seL4_Printf("\n");
+    seL4_Printf("expect=%l\n");
+    seL4_Printf("       %la"); seL4_Printf("\n");
+    seL4_Printf("expect=%la\n");
+    seL4_Printf("       %ll"); seL4_Printf("\n");
+    seL4_Printf("expect=%ll\n");
+    seL4_Printf("       %llz"); seL4_Printf("\n");
+    seL4_Printf("expect=%llz\n");
+    seL4_Printf("       %llz1"); seL4_Printf("\n");
+    seL4_Printf("expect=%llz1\n");
+
+    seL4_Printf("uint64=0x%llx\n", 0xFEDCBA9876543210ll);
+    seL4_Printf("expect=0xFEDCBA9876543210\n");
+    void *pv = (void *)0x87654321;
+    seL4_Printf("    pv=0x%p\n", pv);
+    seL4_Printf("expect=0x87654321\n");
 
     seL4_Assert(0 == 0);
     seL4_DebugAssert(0 == 0);

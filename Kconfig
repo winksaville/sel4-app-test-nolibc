@@ -9,6 +9,7 @@ menuconfig APP_TEST_NOLIBC
     bool "test-nolibc"
     default n
     select LIB_SEL4
+    select LIB_SEL4_STRING
     select LIB_SEL4_PRINTF
     select LIB_SEL4_PUTCHAR
     select LIB_SEL4_ASSERT
