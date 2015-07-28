@@ -28,6 +28,22 @@ typedef struct {
 /**
  * Write a character using seL4_PutChar
  */
+static void writeBeg(seL4_Writer* this) {
+    Buffer *pBuffer = (Buffer*)this->data;
+    pBuffer->idx = 0;
+}
+
+/**
+ * Write a character using seL4_PutChar
+ */
+static void writeEnd(seL4_Writer* this) {
+    Buffer *pBuffer = (Buffer*)this->data;
+    pBuffer->buff[pBuffer->idx] = 0;
+}
+
+/**
+ * Write a character using seL4_PutChar
+ */
 static void writeChar(seL4_Writer* this, void* param) {
     Buffer *pBuffer = (Buffer*)this->data;
     char ch = ((char)(((int)param) & 0xff));
@@ -46,7 +62,9 @@ int main(void) {
         .idx = 0
     };
     seL4_Writer writer = {
-        .write = writeChar,
+        .writeBeg = writeBeg,
+        .writeEnd = writeEnd,
+        .writeParam = writeChar,
         .data = &buffer
     };
 
