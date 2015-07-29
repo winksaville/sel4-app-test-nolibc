@@ -18,6 +18,8 @@
 #include <sel4/bootinfo.h>
 #include <sel4/stop.h>
 
+volatile seL4_Uint32 volatile0 = 0;
+
 /**
  * Return seL4_True if the expr was not true signifying a failure
  */
@@ -25,8 +27,14 @@ static inline seL4_Bool test_failure(seL4_Bool expr, const char* exprStrg,
                                      const char* function, const char* file, const int lineNumber) {
     seL4_Bool failure = !expr;
     if (failure) {
-        seL4_Printf("TEST '%s' was not true. func=%s file=%s:%d\n",
-            exprStrg, function, file, lineNumber);
+        if (seL4_StrLen(exprStrg) == 0) {
+            seL4_Printf("TEST was not true. func=%s file=%s:%d\n",
+                        function, file, lineNumber);
+        } else {
+            seL4_Printf("TEST '%s' was not true. func=%s file=%s:%d\n",
+                        exprStrg, function, file, lineNumber);
+        }
+
     }
     return failure;
 }
@@ -102,53 +110,8 @@ seL4_Bool test_simple_types(void) {
     return failure;
 }
 
-volatile seL4_Uint32 volatile0 = 0;
-
-typedef struct {
-    int idx;
-    char buff[256];
-} Buffer;
-
-/**
- * Write a character using seL4_PutChar
- */
-static void writeBeg(seL4_Writer* this) {
-    Buffer *pBuffer = (Buffer*)this->data;
-    pBuffer->idx = 0;
-}
-
-/**
- * Write a character using seL4_PutChar
- */
-static void writeEnd(seL4_Writer* this) {
-    Buffer *pBuffer = (Buffer*)this->data;
-    pBuffer->buff[pBuffer->idx] = 0;
-}
-
-/**
- * Write a character using seL4_PutChar
- */
-static void writeChar(seL4_Writer* this, void* param) {
-    Buffer *pBuffer = (Buffer*)this->data;
-    char ch = ((char)(((int)param) & 0xff));
-    pBuffer->buff[pBuffer->idx++] = ch;
-    if (pBuffer->idx >= sizeof(pBuffer->buff)) {
-        pBuffer->idx = 0;
-    }
-}
-
-int testx(void) {
+seL4_Bool test_sel4_assert() {
     seL4_Bool failure = seL4_False;
-
-    Buffer buffer = {
-        .idx = 0
-    };
-    seL4_Writer writer = {
-        .writeBeg = writeBeg,
-        .writeEnd = writeEnd,
-        .writeParam = writeChar,
-        .data = &buffer
-    };
 
     /*
      * Manually test these compile time errors by enabling both
@@ -179,128 +142,172 @@ int testx(void) {
      */
     //seL4_DebugAssert(volatile0 == 2);
 
-    //seL4_BenchmarkResetLog();
-    //seL4_BenchmarkDumpFullLog();
+    // None of this should fail
+    seL4_Assert(0 == 0);
+    seL4_Assert(volatile0 == 0);
+    seL4_DebugAssert(0 == 0);
+    seL4_DebugAssert(volatile0 == 0);
+    seL4_CompileTimeAssert(0 == 0);
+    seL4_Bool b = seL4_True;
+    seL4_Assert(b != seL4_False);
 
-    char *str1 = "str1";
-    char *str2 = "str2";
-    seL4_Assert(seL4_StrNCmp(seL4_Null, seL4_Null, 0) == 0);
-    seL4_Assert(seL4_StrNCmp(str1, seL4_Null, 0) == 0);
-    seL4_Assert(seL4_StrNCmp(seL4_Null, str1, 0) == 0);
-    seL4_Assert(seL4_StrNCmp(str1, str1, 4) == 0);
-    seL4_Assert(seL4_StrNCmp(str1, str2, 3) == 0);
-    seL4_Assert(seL4_StrNCmp(str1, str2, 4) < 0);
-    seL4_Assert(seL4_StrNCmp(str2, str1, 4) > 0);
+    return failure;
+}
 
-    seL4_PutChar('h');
-    seL4_PutChar('i');
-    seL4_PutChar('\n');
+#if defined(CONFIG_BENCHMARK)
+
+seL4_Bool test_benchmark(void) {
+    seL4_BenchmarkResetLog();
+    seL4_BenchmarkDumpFullLog();
+    return seL4_False;
+}
+
+#else // CONFIG_BENCHMARK is not defined
+
+#pragma message "In " __FILE__ " CONFIG_BENCHMARK is not defined. Edit .config setting 'CONFIG_BENCHMARK=y'"
+
+#endif // CONFIG_BENCHMARK
+
+// Test BootInfo if it gets initialized, currently it isn't
+seL4_Bool test_bootinfo() {
+    seL4_Bool failure = seL4_False;
+    seL4_BootInfo *bi = seL4_GetBootInfo();
+    failure |= TEST(bi != seL4_Null);
+    failure |= TEST(bi->nodeID == 0);
+    return failure;
+}
+
+typedef struct {
+    int idx;
+    char buff[256];
+} Buffer;
+
+/**
+ * writeBeg called before first writeCharToBuff
+ */
+static void writeBeg(seL4_Writer* this) {
+    Buffer *pBuffer = (Buffer*)this->data;
+    pBuffer->idx = 0;
+}
+
+/**
+ * writeEnd called after the last writeCharToBuff
+ */
+static void writeEnd(seL4_Writer* this) {
+    Buffer *pBuffer = (Buffer*)this->data;
+    pBuffer->buff[pBuffer->idx] = 0;
+}
+
+/**
+ * Write a character to the buffer
+ */
+static void writeCharToBuff(seL4_Writer* this, void* param) {
+    Buffer *pBuffer = (Buffer*)this->data;
+    char ch = ((char)(((int)param) & 0xff));
+    pBuffer->buff[pBuffer->idx++] = ch;
+    if (pBuffer->idx >= sizeof(pBuffer->buff)) {
+        pBuffer->idx = 0;
+    }
+}
+
+static inline seL4_Bool testPrintingResult(const char* expected, Buffer *pBuffer,
+                                           const char* function, const char* file, const int lineNumber) {
+    seL4_Bool failure = seL4_False;
+    if (pBuffer->idx != seL4_StrLen(expected)) {
+        seL4_Printf("buff:%s != expected:%s idx=%d\n", pBuffer->buff, expected, pBuffer->idx);
+        failure |= test_failure(pBuffer->idx == seL4_StrLen(expected), "", function, file, lineNumber);
+    } else if (seL4_StrNCmp(expected, pBuffer->buff, pBuffer->idx) != 0) {
+        seL4_Printf("buff:%s != expected:%s idx=%d\n", pBuffer->buff, expected, pBuffer->idx);
+        failure |= test_failure(seL4_StrNCmp(expected, pBuffer->buff, pBuffer->idx) == 0l,
+                                "", function, file, lineNumber);
+    }
+    return failure;
+}
+
+#define TEST_PRINTING_NO_PARAM(formatting, expectedVal) \
+    ({  seL4_Bool failure; \
+        seL4_WPrintf(&writer, formatting); \
+        failure = testPrintingResult(expectedVal, (Buffer*)(writer.data), __FUNCTION__, __FILE__, __LINE__); \
+        failure; })
+
+#define TEST_PRINTING(formatting, param, expectedVal) \
+    ({  seL4_Bool failure; \
+        seL4_WPrintf(&writer, formatting, param); \
+        failure = testPrintingResult(expectedVal, (Buffer*)(writer.data), __FUNCTION__, __FILE__, __LINE__); \
+        failure; })
+
+
+seL4_Bool test_printf(void) {
+    seL4_Bool failure = seL4_False;
     seL4_Printf("Hello, World\n");
     seL4_DebugPrintf("Hello, World: via seL4_DebugDrintf\n");
 
-    seL4_WPrintf(&writer, "Hello");
-    seL4_Printf("seL4_WPrintf: buffer.buff=%s\n", buffer.buff);
-    seL4_Assert(buffer.idx == 5);
-    seL4_Assert(seL4_StrNCmp("Hello", buffer.buff, 5) == 0);
+    // Define a buffer and a writer for testing printf
+    Buffer buffer;
+    seL4_Writer writer = {
+            .writeBeg = writeBeg,
+            .writeParam = writeCharToBuff,
+            .writeEnd = writeEnd,
+            .data = &buffer
+    };
 
-    seL4_Printf("%"); seL4_Printf("\n");
-    seL4_Printf("expect=<empty>\n");
-    seL4_Printf("       %1"); seL4_Printf("\n");
-    seL4_Printf("expect=%1\n");
-    seL4_Printf("       %%"); seL4_Printf("\n");
-    seL4_Printf("expect=%s\n", "%");
-    seL4_Printf("   str=%s\n", "string");
-    seL4_Printf("expect=string\n");
-    seL4_Printf("binary=%b\n",0);
-    seL4_Printf("expect=0\n");
-    seL4_Printf("binary=%b\n", 0x87654321);
-    seL4_Printf("expect=10000111011001010100001100100001\n");
-    seL4_Printf("binary=%b\n", 0xFFFFFFFF);
-    seL4_Printf("expect=11111111111111111111111111111111\n");
-    seL4_Printf("int   =%d\n", 0);
-    seL4_Printf("expect=0\n", 0);
-    seL4_Printf("int=%d\n", 1);
-    seL4_Printf("expect=1\n");
-    seL4_Printf("int   =%d\n", 0x7FFFFFFF);
-    seL4_Printf("expect=2147483647\n");
-    seL4_Printf("int   =%d\n", 0x80000000);
-    seL4_Printf("expect=-2147483648\n");
-    seL4_Printf("int   =%d\n", 0x80000001);
-    seL4_Printf("expect=-2147483647\n");
-    seL4_Printf("int   =%d\n", -1);
-    seL4_Printf("expect=-1\n");
-    seL4_Printf("uint  =%u\n", 0x0);
-    seL4_Printf("expect=0\n");
-    seL4_Printf("uint  =%u\n", 0x7FFFFFFF);
-    seL4_Printf("expect=2147483647\n");
-    seL4_Printf("uint  =%u\n", 0x80000000);
-    seL4_Printf("expect=2147483648\n");
-    seL4_Printf("uint  =%u\n", 0x80000001);
-    seL4_Printf("expect=2147483649\n");
-    seL4_Printf("uint  =0x%x\n", 0x1234567);
-    seL4_Printf("expect=0x1234567\n");
-    seL4_Printf("uint  =0x%x\n", 0x89ABCDEF);
-    seL4_Printf("expect=0x89ABCDEF\n");
-    seL4_Printf("uint  =0x%x\n", 0xFFFFFFFF);
-    seL4_Printf("expect=0xFFFFFFFF\n");
-    seL4_Printf("       %l"); seL4_Printf("\n");
-    seL4_Printf("expect=%l\n");
-    seL4_Printf("       %la"); seL4_Printf("\n");
-    seL4_Printf("expect=%la\n");
-    seL4_Printf("       %ll"); seL4_Printf("\n");
-    seL4_Printf("expect=%ll\n");
-    seL4_Printf("       %llz"); seL4_Printf("\n");
-    seL4_Printf("expect=%llz\n");
-    seL4_Printf("       %llz1"); seL4_Printf("\n");
-    seL4_Printf("expect=%llz1\n");
+    failure |= TEST_PRINTING_NO_PARAM("Hello", "Hello");
+    failure |= TEST_PRINTING_NO_PARAM("%", "");
+    failure |= TEST_PRINTING_NO_PARAM("%1", "%1");
+    failure |= TEST_PRINTING_NO_PARAM("%%", "%");
 
-    seL4_Printf("uint64=0x%llx\n", 0xFEDCBA9876543210ll);
-    seL4_Printf("expect=0xFEDCBA9876543210\n");
-    void *pv = (void *)0x87654321;
-    seL4_Printf("    pv=0x%p\n", pv);
-    seL4_Printf("expect=0x87654321\n");
+    failure |= TEST_PRINTING("%s", "string", "string");
+    failure |= TEST_PRINTING("%b", 0, "0");
+    failure |= TEST_PRINTING("%b", 0x87654321, "10000111011001010100001100100001");
+    failure |= TEST_PRINTING("%b", 0xFFFFFFFF, "11111111111111111111111111111111");
 
-    seL4_Assert(0 == 0);
-    seL4_DebugAssert(0 == 0);
-    seL4_CompileTimeAssert(1 == 1);
-    seL4_Bool b = seL4_True;
-    seL4_Assert(b != seL4_False);
-  
-    seL4_Int8 i8 = 1;
-    seL4_Assert(i8 == 1);
-    seL4_Assert(sizeof(i8) == 1);
-    seL4_Int16 i16 = 2;
-    seL4_Assert(i16 == 2);
-    seL4_Assert(sizeof(i16) == 2);
-    seL4_Int32 i32 = 3;
-    seL4_Assert(i32 == 3);
-    seL4_Assert(sizeof(i32) == 4);
-    seL4_Int64 i64 = 4;
-    seL4_Assert(i64 == 4);
-    seL4_Assert(sizeof(i64) == 8);
+    failure |= TEST_PRINTING("%d", 1, "1");
+    failure |= TEST_PRINTING("%d", 0x7FFFFFFF, "2147483647");
+    failure |= TEST_PRINTING("%d", 0x80000000, "-2147483648");
+    failure |= TEST_PRINTING("%d", 0x80000001, "-2147483647");
+    failure |= TEST_PRINTING("%d", 0xFFFFFFFF, "-1");
+    failure |= TEST_PRINTING("%d", -1, "-1");
 
-    seL4_Uint8 u8 = 1;
-    seL4_Assert(u8 == 1);
-    seL4_Assert(sizeof(u8) == 1);
-    seL4_Uint16 u16 = 2;
-    seL4_Assert(u16 == 2);
-    seL4_Assert(sizeof(u16) == 2);
-    seL4_Uint32 u32 = 3;
-    seL4_Assert(u32 == 3);
-    seL4_Assert(sizeof(u32) == 4);
-    seL4_Uint64 u64 = 4;
-    seL4_Assert(u64 == 4);
-    seL4_Assert(sizeof(u64) == 8);
+    failure |= TEST_PRINTING("%u", 2, "2");
+    failure |= TEST_PRINTING("%u", 0x7FFFFFFF, "2147483647");
+    failure |= TEST_PRINTING("%u", 0x80000000, "2147483648");
+    failure |= TEST_PRINTING("%u", 0x80000001, "2147483649");
+    failure |= TEST_PRINTING("%u", 0xFFFFFFFF, "4294967295");
+    failure |= TEST_PRINTING("%u", -1, "4294967295");
 
-    seL4_Uint8 *p = seL4_Null;
-    seL4_Assert(p == seL4_Null);
+    failure |= TEST_PRINTING("%x", 0, "0");
+    failure |= TEST_PRINTING("%x", 9, "9");
+    failure |= TEST_PRINTING("%x", 10, "a");
+    failure |= TEST_PRINTING("%x", 15, "f");
+    failure |= TEST_PRINTING("%x", 16, "10");
+    failure |= TEST_PRINTING("0x%x", 0x12345678, "0x12345678");
+    failure |= TEST_PRINTING("0x%x", 0x9abcdef0, "0x9abcdef0");
 
-    seL4_BootInfo *bi = seL4_GetBootInfo();
-    seL4_Printf("bi=%p\n", bi);
-    seL4_Printf("bi->nodeId=%d\n", bi->nodeID);
+    failure |= TEST_PRINTING_NO_PARAM("%l", "%l");
+    failure |= TEST_PRINTING_NO_PARAM("%la", "%la");
+    failure |= TEST_PRINTING_NO_PARAM("%ll", "%ll");
+    failure |= TEST_PRINTING_NO_PARAM("%llz1", "%llz1");
 
-    seL4_Printf("Test nolibc done, Stopping...\n");
-    seL4_Stop();
+    failure |= TEST_PRINTING("%llx", 0ll, "0");
+    failure |= TEST_PRINTING("%llx", 9ll, "9");
+    failure |= TEST_PRINTING("%x", 10ll, "a");
+    failure |= TEST_PRINTING("%x", 15ll, "f");
+    failure |= TEST_PRINTING("%llx", 16ll, "10");
+
+    // Test we are "filling" zeros correctly as we print using writeUint32 twice
+    failure |= TEST_PRINTING("%llx", 0x80000000ll, "80000000");
+    failure |= TEST_PRINTING("%llx", 0x800000000ll, "800000000");
+    failure |= TEST_PRINTING("%llx", 0x800000000000ll, "800000000000");
+    failure |= TEST_PRINTING("%llx", 0x80000000000000ll, "80000000000000");
+    failure |= TEST_PRINTING("%llx", 0x8000000000000000ll, "8000000000000000");
+    failure |= TEST_PRINTING("%llx", 0x8000000000000001ll, "8000000000000001");
+
+    failure |= TEST_PRINTING("%llx", 0xFEDCBA9876543210ll, "fedcba9876543210");
+    failure |= TEST_PRINTING("%llx", 0x7fffffffffffffffll, "7fffffffffffffff");
+    failure |= TEST_PRINTING("%llx", -1ll,                 "ffffffffffffffff");
+
+    void *pv = (void *)0xf7654321;
+    failure |= TEST_PRINTING("%p", pv, "f7654321");
 
     return failure;
 }
@@ -312,10 +319,17 @@ int testx(void) {
 int main(void) {
     seL4_Bool failure = seL4_False;
     seL4_Printf("\ntest-nolibc:\n");
+
     failure |= test_strlen();
     failure |= test_strncmp();
     failure |= test_putchar();
     failure |= test_simple_types();
-    //testx();
+    failure |= test_sel4_assert();
+    #if defined(CONFIG_BENCHMARK)
+    failure |= test_benchmark();
+    #endif
+    failure |= test_bootinfo();
+    failure |= test_printf();
+
     seL4_Printf(failure ? "-FAILURE-\n" : "+SUCCESS+\n");
 }
