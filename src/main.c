@@ -6,6 +6,7 @@
  * See "LICENSE_BSD2.txt" for details.
  */
 
+#include <sel4/simple_types.h>
 #include <sel4/sel4.h>
 #include <sel4/string.h>
 #include <sel4/printf.h>
@@ -17,8 +18,91 @@
 #include <sel4/bootinfo.h>
 #include <sel4/stop.h>
 
-volatile seL4_Uint32 volatile0 = 0;
+/**
+ * Return seL4_True if the expr was not true signifying a failure
+ */
+static inline seL4_Bool test_failure(seL4_Bool expr, const char* exprStrg,
+                                     const char* function, const char* file, const int lineNumber) {
+    seL4_Bool failure = !expr;
+    if (failure) {
+        seL4_Printf("TEST '%s' was not true. func=%s file=%s:%d\n",
+            exprStrg, function, file, lineNumber);
+    }
+    return failure;
+}
 
+/**
+ * Macro which returns seL4_True if the expr did NOT evaluate to true
+ */
+#define TEST(expr) test_failure((seL4_Bool)(expr), #expr, __FUNCTION__, __FILE__, __LINE__)
+
+seL4_Bool test_strlen(void) {
+    seL4_Bool failure = seL4_False;
+    failure |= TEST(seL4_StrLen(seL4_Null) == 0);
+    failure |= TEST(seL4_StrLen("") == 0);
+    failure |= TEST(seL4_StrLen("1") == 1);
+    failure |= TEST(seL4_StrLen("\n") == 1);
+    failure |= TEST(seL4_StrLen("12") == 2);
+    return failure;
+}
+
+seL4_Bool test_strncmp(void) {
+    seL4_Bool failure = seL4_False;
+    char *str1 = "str1";
+    char *str2 = "str2";
+    failure |= TEST(seL4_StrNCmp(seL4_Null, seL4_Null, 0) == 0);
+    failure |= TEST(seL4_StrNCmp(str1, seL4_Null, 0) == 0);
+    failure |= TEST(seL4_StrNCmp(seL4_Null, str1, 0) == 0);
+    failure |= TEST(seL4_StrNCmp(str1, str1, 4) == 0);
+    failure |= TEST(seL4_StrNCmp(str1, str2, 3) == 0);
+    failure |= TEST(seL4_StrNCmp(str1, str2, 4) < 0);
+    failure |= TEST(seL4_StrNCmp(str2, str1, 4) > 0);
+    return failure;
+}
+
+seL4_Bool test_putchar(void) {
+    // Just verify we can call it.
+    seL4_PutChar('h');
+    seL4_PutChar('i');
+    seL4_PutChar('\n');
+    return seL4_False;
+}
+
+seL4_Bool test_simple_types(void) {
+    seL4_Bool failure = seL4_False;
+    seL4_Int8 i8 = 1;
+    failure |= TEST(i8 == 1);
+    failure |= TEST(sizeof(i8) == 1);
+    seL4_Int16 i16 = 2;
+    failure |= TEST(i16 == 2);
+    failure |= TEST(sizeof(i16) == 2);
+    seL4_Int32 i32 = 3;
+    failure |= TEST(i32 == 3);
+    failure |= TEST(sizeof(i32) == 4);
+    seL4_Int64 i64 = 4;
+    failure |= TEST(i64 == 4);
+    failure |= TEST(sizeof(i64) == 8);
+
+    seL4_Uint8 u8 = 1;
+    failure |= TEST(u8 == 1);
+    failure |= TEST(sizeof(u8) == 1);
+    seL4_Uint16 u16 = 2;
+    failure |= TEST(u16 == 2);
+    failure |= TEST(sizeof(u16) == 2);
+    seL4_Uint32 u32 = 3;
+    failure |= TEST(u32 == 3);
+    failure |= TEST(sizeof(u32) == 4);
+    seL4_Uint64 u64 = 4;
+    failure |= TEST(u64 == 4);
+    failure |= TEST(sizeof(u64) == 8);
+
+    seL4_Uint8 *p = seL4_Null;
+    failure |= TEST(p == seL4_Null);
+
+    return failure;
+}
+
+volatile seL4_Uint32 volatile0 = 0;
 
 typedef struct {
     int idx;
@@ -53,11 +137,9 @@ static void writeChar(seL4_Writer* this, void* param) {
     }
 }
 
-/**
- * No parameters are passed to main, the return
- * value is ignored and the program hangs.
- */
-int main(void) {
+int testx(void) {
+    seL4_Bool failure = seL4_False;
+
     Buffer buffer = {
         .idx = 0
     };
@@ -220,5 +302,20 @@ int main(void) {
     seL4_Printf("Test nolibc done, Stopping...\n");
     seL4_Stop();
 
-    return 0;
+    return failure;
+}
+
+/**
+ * No parameters are passed to main, the return
+ * value is ignored and the program hangs.
+ */
+int main(void) {
+    seL4_Bool failure = seL4_False;
+    seL4_Printf("\ntest-nolibc:\n");
+    failure |= test_strlen();
+    failure |= test_strncmp();
+    failure |= test_putchar();
+    failure |= test_simple_types();
+    //testx();
+    seL4_Printf(failure ? "-FAILURE-\n" : "+SUCCESS+\n");
 }
