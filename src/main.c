@@ -6,6 +6,8 @@
  * See "LICENSE_BSD2.txt" for details.
  */
 
+#include <autoconf.h>
+
 #include <sel4/simple_types.h>
 #include <sel4/sel4.h>
 #include <sel4/string.h>
@@ -15,8 +17,6 @@
 #include <sel4/debug_assert.h>
 #include <sel4/putchar.h>
 #include <sel4/benchmark.h>
-#include <sel4/bootinfo.h>
-#include <sel4/stop.h>
 
 volatile seL4_Uint32 volatile0 = 0;
 
@@ -332,4 +332,5 @@ int main(void) {
     failure |= test_printf();
 
     seL4_Printf(failure ? "-FAILURE-\n" : "+SUCCESS+\n");
+    return 0;
 }
