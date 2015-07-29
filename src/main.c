@@ -9,14 +9,17 @@
 #include <autoconf.h>
 
 #include <sel4/simple_types.h>
-#include <sel4/sel4.h>
+
 #include <sel4/string.h>
 #include <sel4/printf.h>
 #include <sel4/debug_printf.h>
+#include <sel4/putchar.h>
 #include <sel4/assert.h>
 #include <sel4/debug_assert.h>
-#include <sel4/putchar.h>
 #include <sel4/benchmark.h>
+
+#include <sel4/sel4.h>
+
 
 volatile seL4_Uint32 volatile0 = 0;
 
