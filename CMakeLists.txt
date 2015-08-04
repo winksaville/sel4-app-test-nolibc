@@ -1,6 +1,8 @@
-add_executable(test-nolibc src/main.c)
+set(target "test-nolibc")
 
-target_link_libraries(test-nolibc
+add_executable(${target} src/main.c)
+
+target_link_libraries(${target}
     libsel4
     libsel4assert
     libsel4benchmark
@@ -10,4 +12,6 @@ target_link_libraries(test-nolibc
     libsel4startstop
 )
 
-add_dependencies(test-nolibc sel4_kernel)
+AddRunTarget(${target})
+
+add_dependencies(${target} sel4_kernel)
